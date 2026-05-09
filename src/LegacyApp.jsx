@@ -1316,7 +1316,22 @@ var ClientListSubView = () => {
   var [filterPlaca, setFilterPlaca] = useState('');
   var [filterDate, setFilterDate] = useState('');
   useEffect(() => {
-    setSales(DataManager.getSales() || []);
+    // calcular fechaDespacho para registros antiguos que solo tienen fechaVenta
+    var calcDisp = (fv) => {
+      if (!fv) return null;
+      var d = new Date(fv);
+      d.setMinutes(d.getMinutes() + d.getTimezoneOffset());
+      var disp = new Date(d);
+      if (d.getDay() === 6) disp.setDate(d.getDate() + 2);
+      else disp.setDate(d.getDate() + 1);
+      return disp.toISOString().split('T')[0];
+    };
+    var raw = DataManager.getSales() || [];
+    var enriched = raw.map(s => ({
+      ...s,
+      fechaDespacho: s.fechaDespacho || calcDisp(s.fechaVenta)
+    }));
+    setSales(enriched);
   }, []);
   var uniquePlates = useMemo(() => {
     return [...new Set(sales.map(s => s.placa).filter(Boolean))].sort();
