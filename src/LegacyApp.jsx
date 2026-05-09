@@ -49,13 +49,26 @@ var processImportData = (rows, onSuccess) => {
     if (typeof val === 'number') return val;
     return parseFloat(String(val).replace(/[^\d.-]/g, '')) || 0;
   };
+  // Calcula fecha de despacho: factura + 1 día; si sábado -> lunes
+  var calcDispatchDate = (fechaVentaStr) => {
+    if (!fechaVentaStr) return null;
+    var d = new Date(fechaVentaStr);
+    d.setMinutes(d.getMinutes() + d.getTimezoneOffset());
+    var disp = new Date(d);
+    if (d.getDay() === 6) disp.setDate(d.getDate() + 2); // sábado → lunes
+    else disp.setDate(d.getDate() + 1);
+    return disp.toISOString().split('T')[0];
+  };
+
   var cleanRows = [];
   rows.forEach(r => {
     if (r[kPlaca] && r[kImporte]) {
+      var fv = parseDate(r[kFecha]);
       cleanRows.push({
         placa: String(r[kPlaca]).toUpperCase().replace(/\s/g, ''),
         importe: parseMoney(r[kImporte]),
-        fechaVenta: parseDate(r[kFecha]),
+        fechaVenta: fv,
+        fechaDespacho: calcDispatchDate(fv),
         cliente: r[kCliente] || 'Desconocido',
         vendedor: r[kVend] || 'Desconocido',
         guia: kGuia ? String(r[kGuia]).trim() : ''
@@ -77,20 +90,10 @@ var processImportData = (rows, onSuccess) => {
   // 2. Agrupar Despachos
   var dispatches = {};
   cleanRows.forEach(row => {
-    if (!row.fechaVenta) return;
-    var saleDate = new Date(row.fechaVenta);
-    saleDate.setMinutes(saleDate.getMinutes() + saleDate.getTimezoneOffset());
-    var dispatchDate = new Date(saleDate);
-    // Regla Sábado -> Lunes
-    if (saleDate.getDay() === 6) dispatchDate.setDate(saleDate.getDate() + 2);else dispatchDate.setDate(saleDate.getDate() + 1);
-    var dStr = dispatchDate.toISOString().split('T')[0];
-    var key = "".concat(dStr, "_").concat(row.placa);
-    if (!dispatches[key]) dispatches[key] = {
-      fecha: dStr,
-      placa: row.placa,
-      total: 0,
-      guides: []
-    };
+    var dStr = row.fechaDespacho;
+    if (!dStr) return;
+    var key = dStr + "_" + row.placa;
+    if (!dispatches[key]) dispatches[key] = { fecha: dStr, placa: row.placa, total: 0, guides: [] };
     dispatches[key].total += row.importe;
     if (row.guia) dispatches[key].guides.push(row.guia);
   });
@@ -858,7 +861,7 @@ var RankingView = _ref6 => {
     var raw = DataManager.getSales();
     var g = {};
     raw.forEach(r => {
-      var fecha = r.fechaVenta || '';
+      var fecha = r.fechaDespacho || r.fechaVenta || '';
       if (type === 'sellers') {
         if (dateFrom && fecha < dateFrom) return;
         if (dateTo && fecha > dateTo) return;
@@ -1321,7 +1324,7 @@ var ClientListSubView = () => {
   var filteredSales = useMemo(() => {
     return sales.filter(s => {
       var matchP = !filterPlaca || s.placa === filterPlaca;
-      var matchD = !filterDate || s.fechaVenta === filterDate;
+      var matchD = !filterDate || s.fechaDespacho === filterDate;
       return matchP && matchD;
     });
   }, [sales, filterPlaca, filterDate]);
@@ -1400,7 +1403,7 @@ var ClientListSubView = () => {
     className: "px-2 py-1 rounded text-[10px] font-mono font-bold bg-white text-indigo-700 border border-indigo-200 shadow-sm"
   }, row.placa)), /*#__PURE__*/React.createElement("td", {
     className: "px-4 py-2 text-slate-600 font-medium"
-  }, formatDate(row.fechaVenta)), /*#__PURE__*/React.createElement("td", {
+  }, formatDate(row.fechaDespacho || row.fechaVenta)), /*#__PURE__*/React.createElement("td", {
     className: "px-4 py-2 text-right font-mono font-bold text-slate-700 group-hover:text-indigo-700"
   }, formatCurrency(row.importe)))), filteredSales.length === 0 && /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("td", {
     colSpan: "6",
