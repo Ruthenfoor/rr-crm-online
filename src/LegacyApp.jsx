@@ -1375,7 +1375,7 @@ var ClientListSubView = () => {
   }, /*#__PURE__*/React.createElement(Users, {
     size: 32,
     className: "mx-auto mb-2 opacity-20"
-  }), "No hay registros para mostrar")))));
+  }), "No hay registros para mostrar")))))));
 };
 
 var HistorialPlacasView = _ref12 => {
