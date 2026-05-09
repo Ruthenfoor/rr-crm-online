@@ -142,19 +142,23 @@ var KpiCard = _ref => {
     trend
   } = _ref;
   return /*#__PURE__*/React.createElement("div", {
-    className: "bg-white p-5 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow flex items-start justify-between"
-  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("p", {
-    className: "text-slate-500 text-xs font-bold uppercase mb-1 tracking-wide"
+    className: "glass-effect p-6 rounded-3xl border border-white/40 shadow-sm hover-scale flex items-start justify-between relative overflow-hidden"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-gradient-to-br from-white/40 to-transparent rounded-full blur-2xl"
+  }), /*#__PURE__*/React.createElement("div", {
+    className: "relative z-10"
+  }, /*#__PURE__*/React.createElement("p", {
+    className: "text-slate-500 text-xs font-bold uppercase mb-2 tracking-wider"
   }, title), /*#__PURE__*/React.createElement("h3", {
-    className: "text-2xl md:text-3xl font-bold text-slate-800 tracking-tight"
+    className: "text-3xl md:text-4xl font-extrabold text-slate-800 tracking-tight"
   }, value), trend && /*#__PURE__*/React.createElement("div", {
-    className: "flex items-center gap-1 mt-2 text-xs font-bold px-2 py-1 rounded-full bg-emerald-50 text-emerald-600 w-fit"
+    className: "flex items-center gap-1 mt-3 text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-600 w-fit border border-emerald-100/50 shadow-sm"
   }, /*#__PURE__*/React.createElement(TrendingUp, {
-    size: 12
+    size: 14
   }), /*#__PURE__*/React.createElement("span", null, trend))), /*#__PURE__*/React.createElement("div", {
-    className: "p-3 rounded-2xl ".concat(color, " bg-opacity-10 text-").concat(color.split('-')[1], "-600")
+    className: "p-4 rounded-2xl ".concat(color, " bg-opacity-20 text-").concat(color.split('-')[1], "-600 shadow-inner relative z-10 backdrop-blur-sm")
   }, /*#__PURE__*/React.createElement(Icon, {
-    size: 28
+    size: 32
   })));
 };
 
@@ -1255,9 +1259,9 @@ export default function MainApp() {
   }, "Cargando...");
 
   return /*#__PURE__*/React.createElement("div", {
-    className: "flex h-screen overflow-hidden"
+    className: "flex h-screen overflow-hidden bg-slate-100/50"
   }, /*#__PURE__*/React.createElement("div", {
-    className: "hidden md:flex w-64 bg-slate-900 text-slate-300 flex-col p-4 overflow-y-auto"
+    className: "hidden md:flex w-64 bg-gradient-to-b from-slate-900 to-slate-950 text-slate-300 flex-col p-4 overflow-y-auto border-r border-slate-800 shadow-2xl z-20 relative"
   }, /*#__PURE__*/React.createElement("div", {
     className: "flex items-center gap-2 text-white font-bold text-xl mb-6 p-2"
   }, /*#__PURE__*/React.createElement(Truck, {
@@ -1339,7 +1343,21 @@ export default function MainApp() {
     className: "w-full text-left p-2 rounded-lg hover:bg-slate-800 text-xs font-bold text-slate-400 flex items-center gap-2"
   }, /*#__PURE__*/React.createElement(Download, {
     size: 16
-  }), " Exportar Backup JSON"))), /*#__PURE__*/React.createElement("div", {
+  }), " Exportar Backup JSON"), /*#__PURE__*/React.createElement("button", {
+    onClick: async () => {
+      if(!window.confirm("¿Seguro que deseas migrar los datos del backup histórico a Firebase?")) return;
+      try {
+        const res = await fetch('/backup.json');
+        const data = await res.json();
+        await DataManager.migrateData(data.cuadres || [], data.sales || []);
+      } catch(e) {
+        alert("Error cargando backup.json: " + e.message);
+      }
+    },
+    className: "w-full text-left p-2 rounded-lg hover:bg-slate-800 text-xs font-bold text-purple-400 flex items-center gap-2 mt-2"
+  }, /*#__PURE__*/React.createElement(Upload, {
+    size: 16
+  }), " Migrar Backup a Firebase"))), /*#__PURE__*/React.createElement("div", {
     className: "flex-1 flex flex-col bg-slate-100 overflow-hidden"
   }, /*#__PURE__*/React.createElement("div", {
     className: "bg-white p-4 flex items-center justify-between border-b shadow-sm z-10"
