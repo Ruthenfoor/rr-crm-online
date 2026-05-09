@@ -620,41 +620,81 @@ var ExcelImporter = _ref4 => {
   }), " Cargar Excel Diario"));
 };
 var BulkImportView = _ref5 => {
-  var {
-    onImportSuccess
-  } = _ref5;
+  var { onImportSuccess } = _ref5;
   var [text, setText] = useState("");
+  var [status, setStatus] = useState(null); // null | 'loading' | 'done' | 'error'
+  var [result, setResult] = useState(null);
+
   var handlePaste = () => {
     if (!text.trim()) return alert("Pega datos primero");
     var lines = text.trim().split('\n');
     if (lines.length < 2) return alert("Incluye encabezados");
-    var headers = lines[0].split('\t').map(h => h.trim());
-    var data = lines.slice(1).map(l => {
-      var v = l.split('\t');
-      var r = {};
-      headers.forEach((h, i) => r[h] = v[i]);
-      return r;
-    });
-    processImportData(data, (c, u) => {
-      alert("Pegado Exitoso:\nNuevos: ".concat(c, "\nActualizados: ").concat(u));
-      onImportSuccess();
-    });
+    setStatus('loading');
+    setResult(null);
+
+    // Ceder el control al navegador para renderizar el spinner ANTES de procesar
+    setTimeout(() => {
+      try {
+        var headers = lines[0].split('\t').map(h => h.trim());
+        var data = lines.slice(1).map(l => {
+          var v = l.split('\t');
+          var r = {};
+          headers.forEach((h, i) => r[h] = v[i]);
+          return r;
+        });
+        processImportData(data, (c, u) => {
+          setResult({ created: c, updated: u });
+          setStatus('done');
+          setText('');
+          onImportSuccess();
+        });
+      } catch (e) {
+        setStatus('error');
+        console.error(e);
+      }
+    }, 50);
   };
+
   return /*#__PURE__*/React.createElement("div", {
-    className: "bg-white rounded-2xl shadow p-6 h-full flex flex-col"
-  }, /*#__PURE__*/React.createElement("h2", {
-    className: "font-bold text-lg mb-2 flex gap-2"
-  }, /*#__PURE__*/React.createElement(ClipboardCopy, null), " Pegar Datos (Excel)"), /*#__PURE__*/React.createElement("p", {
-    className: "text-sm text-slate-500 mb-2"
-  }, "Copia desde Excel (Ctrl+C) y pega aqu\xED (Ctrl+V). Incluye encabezados (Placa, Importe...)."), /*#__PURE__*/React.createElement("textarea", {
-    value: text,
-    onChange: e => setText(e.target.value),
-    className: "flex-1 border p-2 text-xs font-mono mb-4 rounded",
-    placeholder: "Placa\tImporte..."
-  }), /*#__PURE__*/React.createElement("button", {
-    onClick: handlePaste,
-    className: "bg-blue-600 text-white p-2 rounded font-bold"
-  }, "Procesar"));
+    className: "bg-white rounded-2xl shadow p-6 h-full flex flex-col gap-4"
+  }, /*#__PURE__*/React.createElement("div", { className: "flex items-center gap-3" },
+    /*#__PURE__*/React.createElement(ClipboardCopy, { className: "text-blue-500", size: 22 }),
+    /*#__PURE__*/React.createElement("div", null,
+      /*#__PURE__*/React.createElement("h2", { className: "font-bold text-lg text-slate-800" }, "Pegar Datos (Excel)"),
+      /*#__PURE__*/React.createElement("p", { className: "text-xs text-slate-500" }, "Copia desde Excel (Ctrl+C) y pega aquí. Incluye encabezados: Placa, Importe, Fecha, Cliente...")
+    )
+  ),
+  status === 'loading' && /*#__PURE__*/React.createElement("div", {
+    className: "flex flex-col items-center justify-center flex-1 gap-4 bg-blue-50 rounded-2xl border border-blue-100"
+  },
+    /*#__PURE__*/React.createElement("div", { className: "w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" }),
+    /*#__PURE__*/React.createElement("p", { className: "font-bold text-blue-700 text-sm" }, "Procesando datos..."),
+    /*#__PURE__*/React.createElement("p", { className: "text-xs text-blue-500" }, "Un momento, calculando despachos...")
+  ),
+  status !== 'loading' && /*#__PURE__*/React.createElement(React.Fragment, null,
+    result && status === 'done' && /*#__PURE__*/React.createElement("div", {
+      className: "flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3"
+    },
+      /*#__PURE__*/React.createElement(CheckCircle2, { size: 20, className: "text-emerald-600" }),
+      /*#__PURE__*/React.createElement("span", { className: "text-sm font-bold text-emerald-800" },
+        "Procesado exitosamente — Nuevos: ", result.created, " · Actualizados: ", result.updated
+      )
+    ),
+    /*#__PURE__*/React.createElement("textarea", {
+      value: text,
+      onChange: e => setText(e.target.value),
+      className: "flex-1 border border-slate-200 p-3 text-xs font-mono rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-blue-400 bg-slate-50 min-h-[200px]",
+      placeholder: "Placa\tImporte\tFecha\tCliente..."
+    }),
+    /*#__PURE__*/React.createElement("button", {
+      onClick: handlePaste,
+      disabled: !text.trim(),
+      className: "bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white px-6 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors shadow-md"
+    },
+      /*#__PURE__*/React.createElement(Upload, { size: 18 }),
+      "Procesar e Importar"
+    )
+  ));
 };
 
 // --- NUEVO REPORTE: DESCUENTOS CON FILTRO PLACA ---
