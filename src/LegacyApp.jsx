@@ -1372,11 +1372,11 @@ var ClientListSubView = () => {
     onChange: e => setFilterDate(e.target.value),
     className: "px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-medium text-sm"
   })), /*#__PURE__*/React.createElement("div", {
-    className: "ml-auto bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-2 rounded-xl shadow-lg shadow-blue-500/30 flex flex-col items-end"
+    className: "ml-auto bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-8 py-3 rounded-2xl shadow-xl shadow-blue-500/30 flex flex-col items-end min-w-[180px]"
   }, /*#__PURE__*/React.createElement("span", {
-    className: "text-[10px] uppercase font-bold text-blue-200 tracking-wider"
+    className: "text-[10px] uppercase font-bold text-blue-200 tracking-widest mb-0.5"
   }, "Total Importe"), /*#__PURE__*/React.createElement("span", {
-    className: "font-bold font-mono"
+    className: "text-2xl font-extrabold font-mono tracking-tight"
   }, formatCurrency(totalImporte)))), /*#__PURE__*/React.createElement("div", {
     className: "bg-white rounded-2xl shadow border border-slate-200 overflow-hidden flex-1 flex flex-col"
   }, /*#__PURE__*/React.createElement("div", {
@@ -1386,40 +1386,40 @@ var ClientListSubView = () => {
   }, /*#__PURE__*/React.createElement("thead", {
     className: "bg-slate-50 text-slate-600 uppercase text-[10px] font-bold tracking-wider sticky top-0 z-10"
   }, /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("th", {
-    className: "px-4 py-3 border-b border-slate-200 w-10 text-center"
+    className: "px-3 py-1.5 border-b border-slate-200 w-10 text-center"
   }, "#"), /*#__PURE__*/React.createElement("th", {
-    className: "px-4 py-3 border-b border-slate-200"
+    className: "px-3 py-1.5 border-b border-slate-200"
   }, "Cliente"), /*#__PURE__*/React.createElement("th", {
-    className: "px-4 py-3 border-b border-slate-200"
+    className: "px-3 py-1.5 border-b border-slate-200"
   }, "Vendedor"), /*#__PURE__*/React.createElement("th", {
-    className: "px-4 py-3 border-b border-slate-200"
+    className: "px-3 py-1.5 border-b border-slate-200"
   }, "Placa"), /*#__PURE__*/React.createElement("th", {
-    className: "px-4 py-3 border-b border-slate-200"
+    className: "px-3 py-1.5 border-b border-slate-200"
   }, "F. Despacho"), /*#__PURE__*/React.createElement("th", {
-    className: "px-4 py-3 border-b border-slate-200 text-right"
+    className: "px-3 py-1.5 border-b border-slate-200 text-right"
   }, "Importe"))), /*#__PURE__*/React.createElement("tbody", {
     className: "divide-y divide-slate-100 text-xs"
   }, filteredSales.map((row, idx) => /*#__PURE__*/React.createElement("tr", {
     key: idx,
     className: "hover:bg-slate-50 transition-colors group"
   }, /*#__PURE__*/React.createElement("td", {
-    className: "px-4 py-2 font-mono text-slate-400 text-center"
+    className: "px-3 py-1 font-mono text-slate-400 text-center"
   }, idx + 1), /*#__PURE__*/React.createElement("td", {
-    className: "px-4 py-2 font-medium text-slate-800"
+    className: "px-3 py-1 font-medium text-slate-800"
   }, /*#__PURE__*/React.createElement("div", {
     className: "break-words"
   }, row.cliente)), /*#__PURE__*/React.createElement("td", {
-    className: "px-4 py-2 text-slate-500"
+    className: "px-3 py-1 text-slate-500"
   }, /*#__PURE__*/React.createElement("div", {
     className: "break-words"
   }, row.vendedor)), /*#__PURE__*/React.createElement("td", {
-    className: "px-4 py-2"
+    className: "px-3 py-1"
   }, /*#__PURE__*/React.createElement("span", {
-    className: "px-2 py-1 rounded text-[10px] font-mono font-bold bg-white text-indigo-700 border border-indigo-200 shadow-sm"
+    className: "px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-white text-indigo-700 border border-indigo-200 shadow-sm"
   }, row.placa)), /*#__PURE__*/React.createElement("td", {
-    className: "px-4 py-2 text-slate-600 font-medium"
+    className: "px-3 py-1 text-slate-600 font-medium"
   }, formatDate(row.fechaDespacho || row.fechaVenta)), /*#__PURE__*/React.createElement("td", {
-    className: "px-4 py-2 text-right font-mono font-bold text-slate-700 group-hover:text-indigo-700"
+    className: "px-3 py-1 text-right font-mono font-bold text-slate-700 group-hover:text-indigo-700"
   }, formatCurrency(row.importe)))), filteredSales.length === 0 && /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("td", {
     colSpan: "6",
     className: "text-center py-10 text-slate-400"
