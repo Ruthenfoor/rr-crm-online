@@ -850,50 +850,66 @@ var GuidesReport = () => {
 
 // --- RANKINGS, SUPERVISION, ETC (IGUAL QUE ANTES) ---
 var RankingView = _ref6 => {
-  var {
-    type
-  } = _ref6;
+  var { type } = _ref6;
   var [data, setData] = useState([]);
+  var [dateFrom, setDateFrom] = useState('');
+  var [dateTo, setDateTo] = useState('');
   useEffect(() => {
     var raw = DataManager.getSales();
     var g = {};
     raw.forEach(r => {
+      var fecha = r.fechaVenta || '';
+      if (type === 'sellers') {
+        if (dateFrom && fecha < dateFrom) return;
+        if (dateTo && fecha > dateTo) return;
+      }
       var k = type === 'clients' ? r.cliente : r.vendedor;
-      g[k] = (g[k] || 0) + r.importe;
+      if (!k) return;
+      g[k] = (g[k] || 0) + (r.importe || 0);
     });
-    setData(Object.entries(g).map(_ref7 => {
-      var [n, t] = _ref7;
-      return {
-        name: n,
-        total: t
-      };
-    }).sort((a, b) => b.total - a.total));
-  }, [type]);
+    setData(Object.entries(g).map(([n, t]) => ({ name: n, total: t })).sort((a, b) => b.total - a.total));
+  }, [type, dateFrom, dateTo]);
   var max = data.length > 0 ? data[0].total : 1;
   return /*#__PURE__*/React.createElement("div", {
-    className: "bg-white h-full rounded-2xl shadow border flex flex-col"
+    className: "bg-white h-full rounded-2xl shadow border border-slate-200 flex flex-col overflow-hidden"
   }, /*#__PURE__*/React.createElement("div", {
-    className: "p-4 border-b bg-slate-50 font-bold text-slate-800 flex gap-2"
-  }, type === 'clients' ? /*#__PURE__*/React.createElement(Users, null) : /*#__PURE__*/React.createElement(Briefcase, null), " Ranking ", type), /*#__PURE__*/React.createElement("div", {
+    className: "p-4 border-b bg-slate-50 flex flex-wrap gap-3 items-center"
+  }, /*#__PURE__*/React.createElement("div", { className: "flex items-center gap-2 font-bold text-slate-800" },
+    type === 'clients' ? /*#__PURE__*/React.createElement(Users, { size: 20 }) : /*#__PURE__*/React.createElement(Briefcase, { size: 20 }),
+    " Ranking ", type === 'clients' ? 'Clientes' : 'Vendedores'
+  ),
+  type === 'sellers' && /*#__PURE__*/React.createElement("div", { className: "flex items-center gap-2 ml-auto" },
+    /*#__PURE__*/React.createElement("label", { className: "text-xs font-bold text-slate-500" }, "Desde"),
+    /*#__PURE__*/React.createElement("input", {
+      type: "date", value: dateFrom,
+      onChange: e => setDateFrom(e.target.value),
+      className: "border border-slate-200 rounded-lg px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-blue-400"
+    }),
+    /*#__PURE__*/React.createElement("label", { className: "text-xs font-bold text-slate-500" }, "Hasta"),
+    /*#__PURE__*/React.createElement("input", {
+      type: "date", value: dateTo,
+      onChange: e => setDateTo(e.target.value),
+      className: "border border-slate-200 rounded-lg px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-blue-400"
+    }),
+    (dateFrom || dateTo) && /*#__PURE__*/React.createElement("button", {
+      onClick: () => { setDateFrom(''); setDateTo(''); },
+      className: "text-xs text-slate-400 hover:text-red-500 font-bold"
+    }, "✕ Limpiar")
+  )), /*#__PURE__*/React.createElement("div", {
     className: "flex-1 overflow-y-auto p-4 space-y-3"
-  }, data.map((x, i) => /*#__PURE__*/React.createElement("div", {
-    key: i
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "flex justify-between text-sm mb-1"
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "font-bold w-6"
-  }, "#", i + 1), /*#__PURE__*/React.createElement("span", {
-    className: "flex-1 truncate"
-  }, x.name), /*#__PURE__*/React.createElement("span", {
-    className: "font-bold"
-  }, formatCurrency(x.total))), /*#__PURE__*/React.createElement("div", {
-    className: "h-2 bg-slate-100 rounded overflow-hidden"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "h-full ".concat(type === 'clients' ? 'bg-blue-500' : 'bg-purple-500'),
-    style: {
-      width: "".concat(x.total / max * 100, "%")
-    }
-  }))))));
+  }, data.map((x, i) => /*#__PURE__*/React.createElement("div", { key: i },
+    /*#__PURE__*/React.createElement("div", { className: "flex justify-between text-sm mb-1" },
+      /*#__PURE__*/React.createElement("span", { className: "font-bold text-slate-400 w-6" }, "#", i + 1),
+      /*#__PURE__*/React.createElement("span", { className: "flex-1 px-2" }, x.name),
+      /*#__PURE__*/React.createElement("span", { className: "font-bold text-slate-800" }, formatCurrency(x.total))
+    ),
+    /*#__PURE__*/React.createElement("div", { className: "h-2 bg-slate-100 rounded-full overflow-hidden" },
+      /*#__PURE__*/React.createElement("div", {
+        className: "h-full rounded-full " + (type === 'clients' ? 'bg-blue-500' : 'bg-purple-500'),
+        style: { width: (x.total / max * 100) + "%" }
+      })
+    )
+  ))));
 };
 var SupervisionDashboard = _ref8 => {
   var {
@@ -1178,7 +1194,7 @@ var Analytics = _ref1 => {
   }, /*#__PURE__*/React.createElement("span", null, "Devuelto: ", /*#__PURE__*/React.createElement("span", {
     className: "font-bold text-orange-600"
   }, formatCurrency(x.r))), /*#__PURE__*/React.createElement("span", null, "Total: ", formatCurrency(x.d))), /*#__PURE__*/React.createElement("div", {
-    className: "h-2 bg-slate-100 rounded overflow-hidden relative"
+className: "h-2 bg-slate-100 rounded overflow-hidden relative"
   }, /*#__PURE__*/React.createElement("div", {
     className: "absolute top-0 left-0 h-full bg-orange-500",
     style: {
@@ -1188,6 +1204,8 @@ var Analytics = _ref1 => {
 };
 var CalendarSubView = ({ cuadres, setActiveCuadreId, setView }) => {
   var [currentMonth, setCurrentMonth] = useState(new Date());
+  var [selectedDay, setSelectedDay] = useState(null);
+  var [selectedDayCuadres, setSelectedDayCuadres] = useState([]);
 
   var getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
   var getFirstDayOfMonth = (year, month) => new Date(year, month, 1).getDay();
@@ -1201,78 +1219,93 @@ var CalendarSubView = ({ cuadres, setActiveCuadreId, setView }) => {
   var cuadresByDay = {};
   cuadres.forEach(c => {
     if (!c.fecha) return;
-    var dateStr = c.fecha; 
-    if (!cuadresByDay[dateStr]) cuadresByDay[dateStr] = [];
-    cuadresByDay[dateStr].push(c);
+    if (!cuadresByDay[c.fecha]) cuadresByDay[c.fecha] = [];
+    cuadresByDay[c.fecha].push(c);
   });
 
-  for (let i = 0; i < firstDay; i++) {
-    days.push(null);
-  }
-  for (let i = 1; i <= daysInMonth; i++) {
-    days.push(new Date(year, month, i));
-  }
+  for (let i = 0; i < firstDay; i++) days.push(null);
+  for (let i = 1; i <= daysInMonth; i++) days.push(new Date(year, month, i));
 
-  var monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
-
+  var monthNames = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
   var nextMonth = () => setCurrentMonth(new Date(year, month + 1, 1));
   var prevMonth = () => setCurrentMonth(new Date(year, month - 1, 1));
+  var openDay = (ds, dcs) => { setSelectedDay(ds); setSelectedDayCuadres(dcs); };
+  var closeModal = () => setSelectedDay(null);
 
   return /*#__PURE__*/React.createElement("div", {
-    className: "bg-white/80 backdrop-blur-xl h-full rounded-2xl shadow-xl border border-white overflow-hidden flex flex-col"
+    className: "bg-white h-full rounded-2xl shadow border overflow-hidden flex flex-col"
   }, /*#__PURE__*/React.createElement("div", {
-    className: "p-4 border-b flex justify-between items-center bg-gradient-to-r from-slate-50 to-white"
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: prevMonth,
-    className: "p-2 hover:bg-slate-200 rounded-lg flex items-center justify-center"
-  }, /*#__PURE__*/React.createElement(ChevronDown, {
-    className: "rotate-90",
-    size: 20
-  })), /*#__PURE__*/React.createElement("h2", {
-    className: "font-bold text-lg text-slate-800"
-  }, monthNames[month], " ", year), /*#__PURE__*/React.createElement("button", {
-    onClick: nextMonth,
-    className: "p-2 hover:bg-slate-200 rounded-lg flex items-center justify-center"
-  }, /*#__PURE__*/React.createElement(ChevronDown, {
-    className: "-rotate-90",
-    size: 20
-  }))), /*#__PURE__*/React.createElement("div", {
-    className: "flex-1 overflow-y-auto p-4 custom-scrollbar"
+    className: "p-4 border-b flex justify-between items-center bg-slate-50"
+  }, /*#__PURE__*/React.createElement("button", { onClick: prevMonth, className: "p-2 hover:bg-slate-200 rounded-lg transition-colors" },
+    /*#__PURE__*/React.createElement(ChevronDown, { className: "rotate-90", size: 20 })
+  ), /*#__PURE__*/React.createElement("h2", { className: "font-bold text-lg text-slate-800" }, monthNames[month], " ", year),
+  /*#__PURE__*/React.createElement("button", { onClick: nextMonth, className: "p-2 hover:bg-slate-200 rounded-lg transition-colors" },
+    /*#__PURE__*/React.createElement(ChevronDown, { className: "-rotate-90", size: 20 })
+  )), /*#__PURE__*/React.createElement("div", { className: "flex-1 overflow-y-auto p-4" },
+    /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-7 gap-1" },
+      ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"].map(d => /*#__PURE__*/React.createElement("div", {
+        key: d, className: "text-center font-bold text-slate-400 text-xs uppercase py-2"
+      }, d)),
+      days.map((d, i) => {
+        if (!d) return /*#__PURE__*/React.createElement("div", { key: i, className: "min-h-[72px] bg-slate-50 rounded-xl" });
+        var mStr = String(month + 1).padStart(2, '0');
+        var dStr = String(d.getDate()).padStart(2, '0');
+        var ds = year + "-" + mStr + "-" + dStr;
+        var dcs = cuadresByDay[ds] || [];
+        var hasData = dcs.length > 0;
+        var allOk = hasData && dcs.every(c => (c.totalRecaudado || 0) >= (c.montoDespacho || 0) - 0.1);
+        var hasPending = hasData && dcs.some(c => (c.totalRecaudado || 0) < (c.montoDespacho || 0) - 0.1);
+        var isToday = new Date().toISOString().slice(0, 10) === ds;
+        return /*#__PURE__*/React.createElement("div", {
+          key: i,
+          onClick: hasData ? () => openDay(ds, dcs) : undefined,
+          className: "min-h-[72px] border rounded-xl p-2 flex flex-col items-center gap-1 bg-white " +
+            (hasData ? "cursor-pointer hover:bg-blue-50 border-slate-200" : "border-slate-100") +
+            (isToday ? " ring-2 ring-blue-400" : "")
+        }, /*#__PURE__*/React.createElement("span", {
+          className: "text-sm font-bold " + (isToday ? "text-blue-600" : "text-slate-600")
+        }, d.getDate()),
+        hasData && /*#__PURE__*/React.createElement("div", { className: "flex gap-1" },
+          hasPending && /*#__PURE__*/React.createElement("span", { className: "w-2.5 h-2.5 rounded-full bg-red-400" }),
+          allOk && /*#__PURE__*/React.createElement("span", { className: "w-2.5 h-2.5 rounded-full bg-emerald-400" })
+        ),
+        hasData && /*#__PURE__*/React.createElement("span", { className: "text-[9px] text-slate-400 font-semibold" }, dcs.length, " desp."));
+      })
+    )
+  ), selectedDay && /*#__PURE__*/React.createElement("div", {
+    onClick: closeModal,
+    className: "fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
   }, /*#__PURE__*/React.createElement("div", {
-    className: "grid grid-cols-7 gap-2"
-  }, ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"].map(d => /*#__PURE__*/React.createElement("div", {
-    key: d,
-    className: "text-center font-bold text-slate-400 text-xs uppercase py-2"
-  }, d)), days.map((d, i) => {
-    if (!d) return /*#__PURE__*/React.createElement("div", {
-      key: i,
-      className: "min-h-[100px] bg-slate-50/50 rounded-xl"
-    });
-    var mStr = String(month + 1).padStart(2, '0');
-    var dStr = String(d.getDate()).padStart(2, '0');
-    var dateString = "".concat(year, "-").concat(mStr, "-").concat(dStr);
-    var dayCuadres = cuadresByDay[dateString] || [];
+    onClick: e => e.stopPropagation(),
+    className: "bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "p-4 border-b bg-slate-50 flex justify-between items-center"
+  }, /*#__PURE__*/React.createElement("h3", { className: "font-bold text-slate-800 flex items-center gap-2" },
+    /*#__PURE__*/React.createElement(Calendar, { size: 18, className: "text-blue-500" }),
+    "Despachos — ", formatDate(selectedDay)
+  ), /*#__PURE__*/React.createElement("button", {
+    onClick: closeModal, className: "p-1 hover:bg-slate-200 rounded-lg text-slate-500 font-bold transition-colors text-lg leading-none"
+  }, "✕")), /*#__PURE__*/React.createElement("div", {
+    className: "p-4 space-y-2 max-h-[60vh] overflow-y-auto"
+  }, selectedDayCuadres.map(c => {
+    var ok = (c.totalRecaudado || 0) >= (c.montoDespacho || 0) - 0.1;
     return /*#__PURE__*/React.createElement("div", {
-      key: i,
-      className: "min-h-[100px] border border-slate-100 rounded-xl p-1 flex flex-col gap-1 hover:shadow-md transition-shadow bg-white"
-    }, /*#__PURE__*/React.createElement("span", {
-      className: "text-right text-xs font-bold text-slate-400 p-1"
-    }, d.getDate()), /*#__PURE__*/React.createElement("div", {
-      className: "flex flex-col gap-1 overflow-y-auto max-h-[80px] custom-scrollbar"
-    }, dayCuadres.map(c => {
-      var dif = (c.totalRecaudado || 0) - (c.montoDespacho || 0);
-      var bgClass = dif >= -0.1 ? 'bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-200' : 'bg-red-100 text-red-700 border-red-200 hover:bg-red-200';
-      return /*#__PURE__*/React.createElement("button", {
-        key: c.id,
-        onClick: () => {
-          setActiveCuadreId(c.id);
-          setView('edit');
-        },
-        className: "text-[10px] p-1 rounded-md border text-left font-bold truncate transition-transform hover:scale-105 shadow-sm ".concat(bgClass),
-        title: "Placa: ".concat(c.placa, " | Despacho: ").concat(formatCurrency(c.montoDespacho), " | Recaudado: ").concat(formatCurrency(c.totalRecaudado))
-      }, c.placa);
-    })));
-  }))));
+      key: c.id,
+      onClick: () => { setActiveCuadreId(c.id); setView('edit'); closeModal(); },
+      className: "flex items-center justify-between p-3 rounded-xl border cursor-pointer " +
+        (ok ? "border-emerald-200 bg-emerald-50 hover:bg-emerald-100" : "border-red-200 bg-red-50 hover:bg-red-100")
+    }, /*#__PURE__*/React.createElement("div", { className: "flex items-center gap-3" },
+      /*#__PURE__*/React.createElement("span", {
+        className: "px-2 py-1 rounded-lg text-xs font-mono font-bold " + (ok ? "bg-emerald-200 text-emerald-800" : "bg-red-200 text-red-800")
+      }, c.placa),
+      /*#__PURE__*/React.createElement("div", null,
+        /*#__PURE__*/React.createElement("p", { className: "text-xs text-slate-500" }, "Despacho: ", /*#__PURE__*/React.createElement("span", { className: "font-bold text-slate-700" }, formatCurrency(c.montoDespacho))),
+        /*#__PURE__*/React.createElement("p", { className: "text-xs text-slate-500" }, "Recaudado: ", /*#__PURE__*/React.createElement("span", { className: "font-bold " + (ok ? "text-emerald-700" : "text-red-700") }, formatCurrency(c.totalRecaudado)))
+      )
+    ), /*#__PURE__*/React.createElement("span", {
+      className: "text-[10px] font-bold px-2 py-1 rounded-full " + (ok ? "bg-emerald-200 text-emerald-800" : "bg-red-200 text-red-800")
+    }, ok ? "✓ Cuadrado" : "✗ Pendiente"));
+  })))));
 };
 
 var ClientListSubView = () => {
@@ -1296,7 +1329,7 @@ var ClientListSubView = () => {
   return /*#__PURE__*/React.createElement("div", {
     className: "h-full flex flex-col gap-4"
   }, /*#__PURE__*/React.createElement("div", {
-    className: "bg-white/80 backdrop-blur-xl p-4 rounded-2xl shadow-sm border border-white flex flex-wrap gap-4 items-end"
+    className: "bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex flex-wrap gap-4 items-end"
   }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
     className: "block text-xs font-bold text-slate-500 mb-1"
   }, "Buscar Placa"), /*#__PURE__*/React.createElement("div", {
@@ -1327,13 +1360,13 @@ var ClientListSubView = () => {
   }, "Total Importe"), /*#__PURE__*/React.createElement("span", {
     className: "font-bold font-mono"
   }, formatCurrency(totalImporte)))), /*#__PURE__*/React.createElement("div", {
-    className: "bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl border border-white overflow-hidden flex-1 flex flex-col"
+    className: "bg-white rounded-2xl shadow border border-slate-200 overflow-hidden flex-1 flex flex-col"
   }, /*#__PURE__*/React.createElement("div", {
     className: "overflow-x-auto flex-1 custom-scrollbar"
   }, /*#__PURE__*/React.createElement("table", {
     className: "w-full text-left"
   }, /*#__PURE__*/React.createElement("thead", {
-    className: "bg-slate-50/80 backdrop-blur-sm text-slate-600 uppercase text-[10px] font-bold tracking-wider sticky top-0 z-10"
+    className: "bg-slate-50 text-slate-600 uppercase text-[10px] font-bold tracking-wider sticky top-0 z-10"
   }, /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("th", {
     className: "px-4 py-3 border-b border-slate-200 w-10 text-center"
   }, "#"), /*#__PURE__*/React.createElement("th", {
@@ -1350,17 +1383,17 @@ var ClientListSubView = () => {
     className: "divide-y divide-slate-100 text-xs"
   }, filteredSales.map((row, idx) => /*#__PURE__*/React.createElement("tr", {
     key: idx,
-    className: "hover:bg-indigo-50/50 transition-colors group"
+    className: "hover:bg-slate-50 transition-colors group"
   }, /*#__PURE__*/React.createElement("td", {
     className: "px-4 py-2 font-mono text-slate-400 text-center"
   }, idx + 1), /*#__PURE__*/React.createElement("td", {
     className: "px-4 py-2 font-medium text-slate-800"
   }, /*#__PURE__*/React.createElement("div", {
-    className: "truncate max-w-[200px]"
+    className: "break-words"
   }, row.cliente)), /*#__PURE__*/React.createElement("td", {
     className: "px-4 py-2 text-slate-500"
   }, /*#__PURE__*/React.createElement("div", {
-    className: "truncate max-w-[150px]"
+    className: "break-words"
   }, row.vendedor)), /*#__PURE__*/React.createElement("td", {
     className: "px-4 py-2"
   }, /*#__PURE__*/React.createElement("span", {
@@ -1593,7 +1626,7 @@ export default function MainApp() {
   }, /*#__PURE__*/React.createElement(DailySummaryReport, {
     cuadres: cuadres
   })), view === 'hist_placa' && /*#__PURE__*/React.createElement("div", {
-    className: "h-full max-w-4xl mx-auto"
+    className: "h-full"
   }, /*#__PURE__*/React.createElement(HistorialPlacasView, {
     cuadres: cuadres,
     setActiveCuadreId: setActiveCuadreId,
@@ -1611,11 +1644,11 @@ export default function MainApp() {
   })), view === 'discounts' && /*#__PURE__*/React.createElement("div", {
     className: "h-full max-w-4xl mx-auto"
   }, /*#__PURE__*/React.createElement(DiscountsReport, null)), view === 'clients' && /*#__PURE__*/React.createElement("div", {
-    className: "h-full max-w-4xl mx-auto"
+    className: "h-full"
   }, /*#__PURE__*/React.createElement(RankingView, {
     type: "clients"
   })), view === 'sellers' && /*#__PURE__*/React.createElement("div", {
-    className: "h-full max-w-4xl mx-auto"
+    className: "h-full"
   }, /*#__PURE__*/React.createElement(RankingView, {
     type: "sellers"
   })), view === 'guides_report' && /*#__PURE__*/React.createElement("div", {
