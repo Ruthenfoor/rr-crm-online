@@ -71,30 +71,38 @@ export const DataManager = {
   // Migration function
   async migrateData(localCuadres, localSales) {
     try {
-      const batch = writeBatch(db);
+      let batch = writeBatch(db);
       let count = 0;
       
       // Upload Cuadres
       for (const cuadre of localCuadres) {
-        if (!cuadre.id) cuadre.id = Date.now() + Math.random().toString();
+        // Stringify id just in case
+        cuadre.id = String(cuadre.id || Date.now() + Math.random());
         const ref = doc(db, CUADRES_COLLECTION, cuadre.id);
         batch.set(ref, cuadre);
         count++;
         if (count % 400 === 0) {
             await batch.commit();
-            // Start a new batch
+            batch = writeBatch(db); // Create new batch
         }
       }
       
       // Upload Sales
-      for (const sale of localSales) {
-        if (!sale.id) sale.id = Date.now() + Math.random().toString();
+      for (const sale of localSales || []) {
+        sale.id = String(sale.id || Date.now() + Math.random());
         const ref = doc(db, SALES_COLLECTION, sale.id);
         batch.set(ref, sale);
         count++;
+        if (count % 400 === 0) {
+            await batch.commit();
+            batch = writeBatch(db); // Create new batch
+        }
       }
       
-      await batch.commit();
+      if (count % 400 !== 0) {
+        await batch.commit();
+      }
+      
       alert("Migración completada con éxito!");
       await this.fetchAll();
     } catch (e) {
