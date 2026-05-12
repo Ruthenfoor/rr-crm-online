@@ -117,7 +117,7 @@ var processImportData = (rows, onSuccess) => {
       updated++;
     } else {
       current.unshift({
-        id: Date.now() + Math.random(),
+        id: String(Date.now() + Math.random()),
         fecha: d.fecha,
         placa: d.placa,
         montoDespacho: newTotal,
@@ -131,8 +131,12 @@ var processImportData = (rows, onSuccess) => {
       created++;
     }
   });
-  DataManager.saveCuadres(current);
-  onSuccess(created, updated);
+  DataManager.saveCuadres(current).then(() => {
+    onSuccess(created, updated);
+  }).catch(e => {
+    console.error("Error guardando cuadres:", e);
+    onSuccess(created, updated);
+  });
 };
 
 // --- COMPONENTES UI ---
@@ -304,28 +308,32 @@ var Editor = _ref3 => {
     setToast(msg);
     setTimeout(() => setToast(null), 3000);
   };
-  var save = () => {
+  var save = async () => {
     if (!form.placa) return alert("Falta la placa");
     var itemsSafe = form.items || [];
     var allVerified = itemsSafe.length > 0 && itemsSafe.every(i => i.verified);
+    var isNew = !form.id;
+    var cuadreId = form.id ? String(form.id) : Date.now().toString();
     var newState = _objectSpread(_objectSpread({}, form), {}, {
+      id: cuadreId,
       items: itemsSafe,
       isReviewed: form.isReviewed || allVerified,
       totalRecaudado: totals.rec,
-      diferencia: totals.dif
-    });
-    var all = DataManager.getCuadres();
-    var idx = all.findIndex(x => x.id === form.id);
-    if (idx >= 0) all[idx] = _objectSpread(_objectSpread({}, newState), {}, {
+      diferencia: totals.dif,
       updatedAt: new Date()
-    });else all.unshift(_objectSpread(_objectSpread({}, newState), {}, {
-      id: Date.now().toString(),
-      createdAt: new Date()
-    }));
-    DataManager.saveCuadres(all);
-    setCuadres(all);
-    showToast("¡Guardado correctamente!");
-    setTimeout(() => setView('dashboard'), 1000);
+    });
+    if (isNew) {
+      newState.createdAt = new Date();
+    }
+    try {
+      await DataManager.saveCuadre(newState);
+      var all = DataManager.getCuadres();
+      setCuadres([...all]);
+      showToast("¡Guardado correctamente!");
+      setTimeout(() => setView('dashboard'), 1000);
+    } catch(e) {
+      alert("Error al guardar: " + e.message);
+    }
   };
   var del = () => {
     if (confirm("¿Eliminar?")) {
