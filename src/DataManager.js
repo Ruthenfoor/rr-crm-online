@@ -24,12 +24,29 @@ export const DataManager = {
   getCuadres: () => DataManager._cuadres,
   
   async saveCuadres(data) {
-    // For single updates, it's better to update just the changed doc, 
-    // but to keep compatibility with the old `saveCuadres(all)`, 
-    // we assume we just update the ones that changed or we do a batch.
-    // Actually, let's rewrite the logic where it's used so we don't save ALL cuadres every time.
-    // But for now, we can just find the difference or rely on the components calling saveCuadre(single)
+    // Update local cache immediately
     DataManager._cuadres = data;
+    // Persist all cuadres to Firestore using batch writes
+    try {
+      let batch = writeBatch(db);
+      let count = 0;
+      for (const cuadre of data) {
+        const id = String(cuadre.id || Date.now() + Math.random());
+        const ref = doc(db, CUADRES_COLLECTION, id);
+        batch.set(ref, { ...cuadre, id });
+        count++;
+        if (count % 400 === 0) {
+          await batch.commit();
+          batch = writeBatch(db);
+        }
+      }
+      if (count % 400 !== 0) {
+        await batch.commit();
+      }
+    } catch (e) {
+      console.error('Error saving cuadres batch:', e);
+      throw e;
+    }
   },
 
   async saveCuadre(cuadre) {
