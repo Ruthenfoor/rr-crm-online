@@ -18,9 +18,22 @@ var formatCurrency = n => new Intl.NumberFormat('es-PE', {
 var formatDate = d => {
   if (!d) return '';
   var [y, m, day] = d.split('-');
-  return "".concat(day, "/").concat(m, "/").concat(y);
+  return `${day}/${m}/${y}`;
 };
 var normalize = str => str ? str.toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim() : "";
+
+// Genera un ID estable y único para cada venta basado en sus datos clave
+// Esto garantiza que reimportar el mismo Excel no crea duplicados
+var makeSaleId = (placa, fechaVenta, importe, cliente, vendedor) => {
+  var raw = [placa, fechaVenta, importe, normalize(cliente || ''), normalize(vendedor || '')].join('|');
+  // Simple hash numérico determinístico
+  var hash = 0;
+  for (var i = 0; i < raw.length; i++) {
+    hash = ((hash << 5) - hash) + raw.charCodeAt(i);
+    hash |= 0;
+  }
+  return 'sale_' + Math.abs(hash).toString(36) + '_' + raw.length;
+};
 
 // --- LÓGICA DE IMPORTACIÓN ---
 var processImportData = (rows, onSuccess) => {
@@ -77,12 +90,31 @@ var processImportData = (rows, onSuccess) => {
   });
   if (cleanRows.length === 0) return alert("No se encontraron filas válidas.");
 
-  // 1. Guardar Ventas (con filtro de duplicados)
+  // 1. Guardar Ventas con ID determinístico (evita duplicados en Firebase)
   var existingSales = DataManager.getSales();
-  var newSales = cleanRows.filter(row => {
-    // Si la venta ya existe (misma fecha, placa e importe), la ignoramos
-    return !existingSales.some(s => s.fechaVenta === row.fechaVenta && s.placa === row.placa && s.importe === row.importe);
+  var existingIds = new Set(existingSales.map(s => s.id).filter(Boolean));
+  var newSales = [];
+  var duplicateCount = 0;
+
+  cleanRows.forEach(row => {
+    var saleId = makeSaleId(row.placa, row.fechaVenta, row.importe, row.cliente, row.vendedor);
+    if (existingIds.has(saleId)) {
+      duplicateCount++;
+    } else {
+      existingIds.add(saleId);
+      newSales.push({ ...row, id: saleId });
+    }
   });
+
+  if (duplicateCount > 0 && newSales.length === 0) {
+    // Toda la data ya existe
+    alert(`⚠️ Datos duplicados detectados\n\nTodas las ${duplicateCount} filas del Excel ya existen en el sistema. No se registró ningún dato nuevo.`);
+    return;
+  }
+  if (duplicateCount > 0) {
+    alert(`⚠️ Duplicados ignorados: ${duplicateCount} fila(s) ya existían y fueron omitidas.\nSe procesarán ${newSales.length} fila(s) nuevas.`);
+  }
+
   if (newSales.length > 0) {
     DataManager.saveSales([...existingSales, ...newSales]);
   }
@@ -595,6 +627,86 @@ var Editor = _ref3 => {
 };
 
 // --- IMPORTACIÓN Y PEGAR DATOS ---
+var DeduplicateButton = ({ onDone }) => {
+  var [status, setStatus] = useState('idle'); // 'idle' | 'loading' | 'done' | 'error'
+  var [result, setResult] = useState(null);
+
+  var run = async () => {
+    if (!window.confirm(
+      '🧹 Limpiar duplicados de clientes\n\n' +
+      'Este proceso revisará TODOS los registros de ventas en Firebase, ' +
+      'eliminará las copias duplicadas y normalizará los IDs.\n\n' +
+      '¿Deseas continuar?'
+    )) return;
+
+    setStatus('loading');
+    setResult(null);
+    try {
+      var res = await DataManager.deduplicateSales();
+      setResult(res);
+      setStatus('done');
+      if (onDone) onDone();
+    } catch (e) {
+      console.error('Dedup error:', e);
+      setResult({ error: e.message });
+      setStatus('error');
+    }
+  };
+
+  if (status === 'loading') {
+    return /*#__PURE__*/React.createElement('div', {
+      className: 'w-full mt-2 p-2 rounded-lg bg-slate-800 border border-orange-900/40 flex flex-col gap-1'
+    },
+      /*#__PURE__*/React.createElement('div', { className: 'flex items-center gap-2' },
+        /*#__PURE__*/React.createElement('div', { className: 'w-3 h-3 border-2 border-orange-400 border-t-transparent rounded-full animate-spin flex-shrink-0' }),
+        /*#__PURE__*/React.createElement('span', { className: 'text-[10px] font-bold text-orange-400' }, 'Analizando y limpiando...')
+      ),
+      /*#__PURE__*/React.createElement('p', { className: 'text-[9px] text-slate-500 pl-5' }, 'No cierres esta ventana')
+    );
+  }
+
+  if (status === 'done' && result) {
+    var dupsRemoved = result.deleted || 0;
+    var rewritten = result.rewritten || 0;
+    return /*#__PURE__*/React.createElement('div', {
+      className: 'w-full mt-2 p-2 rounded-lg bg-slate-800 border border-emerald-900/40 flex flex-col gap-1'
+    },
+      /*#__PURE__*/React.createElement('div', { className: 'flex items-center justify-between' },
+        /*#__PURE__*/React.createElement('span', { className: 'text-[10px] font-bold text-emerald-400 flex items-center gap-1' },
+          /*#__PURE__*/React.createElement(CheckCircle2, { size: 12 }), ' Limpieza completa'
+        ),
+        /*#__PURE__*/React.createElement('button', {
+          onClick: () => { setStatus('idle'); setResult(null); },
+          className: 'text-slate-500 hover:text-slate-300 text-[10px]'
+        }, '✕')
+      ),
+      /*#__PURE__*/React.createElement('p', { className: 'text-[9px] text-slate-400' },
+        `Total: ${result.total} · Únicos: ${result.unique} · Eliminados: ${dupsRemoved} · Normalizados: ${rewritten}`
+      )
+    );
+  }
+
+  if (status === 'error') {
+    return /*#__PURE__*/React.createElement('div', {
+      className: 'w-full mt-2 p-2 rounded-lg bg-slate-800 border border-red-900/40'
+    },
+      /*#__PURE__*/React.createElement('span', { className: 'text-[10px] font-bold text-red-400' }, '✗ Error: ' + (result?.error || 'Desconocido')),
+      /*#__PURE__*/React.createElement('button', {
+        onClick: () => setStatus('idle'),
+        className: 'ml-2 text-[9px] text-slate-400 underline'
+      }, 'Reintentar')
+    );
+  }
+
+  return /*#__PURE__*/React.createElement('button', {
+    onClick: run,
+    className: 'w-full text-left p-2 rounded-lg hover:bg-slate-800 text-xs font-bold text-orange-400 flex items-center gap-2 mt-2 border border-orange-900/20'
+  },
+    /*#__PURE__*/React.createElement(AlertTriangle, { size: 14 }),
+    ' Limpiar Duplicados'
+  );
+};
+
 var ExcelImporter = _ref4 => {
   var {
     onImportSuccess
@@ -1637,7 +1749,9 @@ export default function MainApp() {
     className: "w-full text-left p-2 rounded-lg hover:bg-slate-800 text-xs font-bold text-purple-400 flex items-center gap-2 mt-2"
   }, /*#__PURE__*/React.createElement(Upload, {
     size: 16
-  }), " Migrar Backup a Firebase"))), /*#__PURE__*/React.createElement("div", {
+  }), " Migrar Backup a Firebase"),
+  /*#__PURE__*/React.createElement(DeduplicateButton, { onDone: () => setCuadres(DataManager.getCuadres()) })
+  )), /*#__PURE__*/React.createElement("div", {
     className: "flex-1 flex flex-col bg-slate-100 overflow-hidden"
   }, /*#__PURE__*/React.createElement("div", {
     className: "bg-white p-4 flex items-center justify-between border-b shadow-sm z-10"
