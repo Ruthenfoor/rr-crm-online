@@ -98,10 +98,10 @@ var processImportData = (rows, onSuccess) => {
     if (row.guia) dispatches[key].guides.push(row.guia);
   });
 
-  // 3. Actualizar DB
+  // 3. Actualizar DB — solo guardar los registros nuevos o modificados (no toda la colección)
   var current = DataManager.getCuadres();
-  var updated = 0,
-    created = 0;
+  var updated = 0, created = 0;
+  var toSave = []; // Solo los cuadres que cambiaron
   Object.values(dispatches).forEach(d => {
     var newTotal = parseFloat(d.total.toFixed(2));
     var uniqueGuides = [...new Set(d.guides)].sort();
@@ -114,9 +114,11 @@ var processImportData = (rows, onSuccess) => {
       var recaudadoActual = (existingRecord.items || []).reduce((s, i) => s + (parseFloat(i.monto) || 0), 0);
       existingRecord.totalRecaudado = recaudadoActual;
       existingRecord.diferencia = recaudadoActual - newTotal;
+      existingRecord.updatedAt = new Date();
+      toSave.push(existingRecord);
       updated++;
     } else {
-      current.unshift({
+      var newCuadre = {
         id: String(Date.now() + Math.random()),
         fecha: d.fecha,
         placa: d.placa,
@@ -127,11 +129,16 @@ var processImportData = (rows, onSuccess) => {
         isReviewed: false,
         createdAt: new Date(),
         guides: uniqueGuides
-      });
+      };
+      current.unshift(newCuadre);
+      toSave.push(newCuadre);
       created++;
     }
   });
-  DataManager.saveCuadres(current).then(() => {
+  // Actualizar caché local inmediatamente
+  DataManager._cuadres = current;
+  // Guardar solo los documentos nuevos/modificados en Firebase (rápido)
+  Promise.all(toSave.map(c => DataManager.saveCuadre(c))).then(() => {
     onSuccess(created, updated);
   }).catch(e => {
     console.error("Error guardando cuadres:", e);
@@ -969,7 +976,10 @@ var SupervisionDashboard = _ref8 => {
     setView
   } = _ref8;
   var [tab, setTab] = useState('pending');
-  var filtered = useMemo(() => tab === 'reviewed' ? cuadres.filter(c => c.isReviewed) : cuadres.filter(c => !c.isReviewed), [cuadres, tab]);
+  var filtered = useMemo(() => {
+    var list = tab === 'reviewed' ? cuadres.filter(c => c.isReviewed) : cuadres.filter(c => !c.isReviewed);
+    return list.slice().sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
+  }, [cuadres, tab]);
   return /*#__PURE__*/React.createElement("div", {
     className: "bg-white h-full rounded-2xl shadow border flex flex-col"
   }, /*#__PURE__*/React.createElement("div", {
