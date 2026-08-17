@@ -85,6 +85,29 @@ export const DataManager = {
     }
   },
 
+  // Solo guarda las ventas NUEVAS en Firestore (sin reescribir las existentes).
+  // Mucho más rápido para importaciones incrementales.
+  async saveNewSales(newSalesOnly) {
+    if (!newSalesOnly || newSalesOnly.length === 0) return;
+    // Actualizar caché local con las nuevas ventas
+    DataManager._sales = [...DataManager._sales, ...newSalesOnly];
+    let batch = writeBatch(db);
+    let count = 0;
+    for (const sale of newSalesOnly) {
+      if (!sale.id) continue;
+      const saleRef = doc(db, SALES_COLLECTION, String(sale.id));
+      batch.set(saleRef, sale);
+      count++;
+      if (count % 400 === 0) {
+        await batch.commit();
+        batch = writeBatch(db);
+      }
+    }
+    if (count % 400 !== 0) {
+      await batch.commit();
+    }
+  },
+
   async deleteCuadre(id) {
     try {
       await deleteDoc(doc(db, CUADRES_COLLECTION, id));
