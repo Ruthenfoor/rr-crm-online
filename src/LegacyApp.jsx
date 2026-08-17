@@ -115,10 +115,6 @@ var processImportData = (rows, onSuccess) => {
     alert(`⚠️ Duplicados ignorados: ${duplicateCount} fila(s) ya existían y fueron omitidas.\nSe procesarán ${newSales.length} fila(s) nuevas.`);
   }
 
-  if (newSales.length > 0) {
-    DataManager.saveSales([...existingSales, ...newSales]);
-  }
-
   // 2. Agrupar Despachos
   var dispatches = {};
   cleanRows.forEach(row => {
@@ -169,11 +165,15 @@ var processImportData = (rows, onSuccess) => {
   });
   // Actualizar caché local inmediatamente
   DataManager._cuadres = current;
-  // Guardar solo los documentos nuevos/modificados en Firebase (rápido)
-  Promise.all(toSave.map(c => DataManager.saveCuadre(c))).then(() => {
+  // Guardar en paralelo: solo ventas nuevas + solo cuadres nuevos/modificados
+  var saveTasks = [
+    ...toSave.map(c => DataManager.saveCuadre(c)),
+    DataManager.saveNewSales(newSales)
+  ];
+  Promise.all(saveTasks).then(() => {
     onSuccess(created, updated);
   }).catch(e => {
-    console.error("Error guardando cuadres:", e);
+    console.error("Error guardando datos:", e);
     onSuccess(created, updated);
   });
 };
