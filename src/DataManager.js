@@ -4,6 +4,50 @@ import { collection, getDocs, setDoc, doc, deleteDoc, writeBatch } from 'firebas
 const CUADRES_COLLECTION = 'cuadres';
 const SALES_COLLECTION = 'sales';
 
+// Sanitizer: garantiza que NINGÚN campo sea undefined, NaN o de tipo incompatible con Firestore
+export function cleanCuadreForFirestore(raw) {
+  if (!raw) return null;
+  const id = String(raw.id || Date.now() + Math.random());
+
+  // Formatear createdAt a ISO string seguro
+  let createdAt = raw.createdAt;
+  if (!createdAt) {
+    createdAt = new Date().toISOString();
+  } else if (createdAt instanceof Date) {
+    createdAt = createdAt.toISOString();
+  } else if (typeof createdAt === 'object' && createdAt.seconds) {
+    createdAt = new Date(createdAt.seconds * 1000).toISOString();
+  } else if (typeof createdAt !== 'string') {
+    createdAt = String(createdAt);
+  }
+
+  // updatedAt siempre se actualiza al momento actual
+  const updatedAt = new Date().toISOString();
+
+  // Limpiar lista de items asegurando que no haya undefined
+  const cleanItems = (Array.isArray(raw.items) ? raw.items : []).map(item => ({
+    id: String(item.id || Date.now() + Math.random()),
+    type: String(item.type || 'efectivo'),
+    monto: String(item.monto !== undefined && item.monto !== null ? item.monto : '0'),
+    descripcion: String(item.descripcion || ''),
+    verified: Boolean(item.verified)
+  }));
+
+  return {
+    id,
+    fecha: String(raw.fecha || new Date().toISOString().split('T')[0]),
+    placa: String(raw.placa || '').toUpperCase().trim(),
+    montoDespacho: typeof raw.montoDespacho === 'number' && !isNaN(raw.montoDespacho) ? raw.montoDespacho : (parseFloat(raw.montoDespacho) || 0),
+    totalRecaudado: typeof raw.totalRecaudado === 'number' && !isNaN(raw.totalRecaudado) ? raw.totalRecaudado : (parseFloat(raw.totalRecaudado) || 0),
+    diferencia: typeof raw.diferencia === 'number' && !isNaN(raw.diferencia) ? raw.diferencia : (parseFloat(raw.diferencia) || 0),
+    isReviewed: Boolean(raw.isReviewed),
+    items: cleanItems,
+    guides: Array.isArray(raw.guides) ? raw.guides.filter(Boolean).map(String) : [],
+    createdAt,
+    updatedAt
+  };
+}
+
 export const DataManager = {
   // We'll cache data locally after fetching
   _cuadres: [],
@@ -11,8 +55,29 @@ export const DataManager = {
 
   async fetchAll() {
     try {
+      // 1. Cargar caché local inmediato si existe
+      try {
+        const cached = localStorage.getItem('rr_crm_cuadres_backup');
+        if (cached && (!this._cuadres || this._cuadres.length === 0)) {
+          this._cuadres = JSON.parse(cached);
+        }
+      } catch (_) {}
+
+      // 2. Traer datos frescos de Firestore
       const cuadresSnap = await getDocs(collection(db, CUADRES_COLLECTION));
-      this._cuadres = cuadresSnap.docs.map(doc => doc.data()).sort((a, b) => new Date(b.createdAt || b.fecha) - new Date(a.createdAt || a.fecha));
+      if (!cuadresSnap.empty) {
+        this._cuadres = cuadresSnap.docs.map(docSnap => {
+          const d = docSnap.data();
+          return {
+            ...d,
+            id: String(d.id || docSnap.id)
+          };
+        }).sort((a, b) => new Date(b.createdAt || b.fecha) - new Date(a.createdAt || a.fecha));
+
+        try {
+          localStorage.setItem('rr_crm_cuadres_backup', JSON.stringify(this._cuadres));
+        } catch (_) {}
+      }
       
       const salesSnap = await getDocs(collection(db, SALES_COLLECTION));
       this._sales = salesSnap.docs.map(doc => doc.data());
@@ -24,16 +89,20 @@ export const DataManager = {
   getCuadres: () => DataManager._cuadres,
   
   async saveCuadres(data) {
+    const cleanList = (data || []).map(cleanCuadreForFirestore);
     // Update local cache immediately
-    DataManager._cuadres = data;
+    DataManager._cuadres = cleanList;
+    try {
+      localStorage.setItem('rr_crm_cuadres_backup', JSON.stringify(cleanList));
+    } catch (_) {}
+
     // Persist all cuadres to Firestore using batch writes
     try {
       let batch = writeBatch(db);
       let count = 0;
-      for (const cuadre of data) {
-        const id = String(cuadre.id || Date.now() + Math.random());
-        const ref = doc(db, CUADRES_COLLECTION, id);
-        batch.set(ref, { ...cuadre, id });
+      for (const cuadre of cleanList) {
+        const ref = doc(db, CUADRES_COLLECTION, cuadre.id);
+        batch.set(ref, cuadre);
         count++;
         if (count % 400 === 0) {
           await batch.commit();
@@ -50,13 +119,38 @@ export const DataManager = {
   },
 
   async saveCuadre(cuadre) {
+    const clean = cleanCuadreForFirestore(cuadre);
+    if (!clean) throw new Error("Datos de cuadre incompletos o inválidos");
+
+    // 1. Actualización inmediata en caché de memoria para que la interfaz nunca se congele
+    const idx = this._cuadres.findIndex(c => String(c.id) === String(clean.id));
+    if (idx >= 0) {
+      this._cuadres[idx] = clean;
+    } else {
+      this._cuadres.unshift(clean);
+    }
+
+    // 2. Respaldo local inmediato en localStorage
     try {
-      await setDoc(doc(db, CUADRES_COLLECTION, cuadre.id), cuadre);
-      const idx = this._cuadres.findIndex(c => c.id === cuadre.id);
-      if (idx >= 0) this._cuadres[idx] = cuadre;
-      else this._cuadres.unshift(cuadre);
+      localStorage.setItem('rr_crm_cuadres_backup', JSON.stringify(this._cuadres));
+    } catch (_) {}
+
+    // 3. Persistir en Firestore con timeout de seguridad (8 segundos)
+    try {
+      const docRef = doc(db, CUADRES_COLLECTION, clean.id);
+      const setDocPromise = setDoc(docRef, clean);
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('TIMEOUT_FIRESTORE')), 8000)
+      );
+
+      await Promise.race([setDocPromise, timeoutPromise]);
+      return clean;
     } catch (e) {
-      console.error("Error saving cuadre", e);
+      if (e.message === 'TIMEOUT_FIRESTORE') {
+        console.warn("Firestore tardó más de 8s; los datos fueron asegurados localmente y se sincronizarán en segundo plano.");
+        return clean;
+      }
+      console.error("Error al guardar cuadre en Firestore:", e);
       throw e;
     }
   },
@@ -109,9 +203,13 @@ export const DataManager = {
   },
 
   async deleteCuadre(id) {
+    const idStr = String(id);
+    this._cuadres = this._cuadres.filter(c => String(c.id) !== idStr);
     try {
-      await deleteDoc(doc(db, CUADRES_COLLECTION, id));
-      this._cuadres = this._cuadres.filter(c => c.id !== id);
+      localStorage.setItem('rr_crm_cuadres_backup', JSON.stringify(this._cuadres));
+    } catch (_) {}
+    try {
+      await deleteDoc(doc(db, CUADRES_COLLECTION, idStr));
       return this._cuadres;
     } catch (e) {
       console.error("Error deleting cuadre", e);
