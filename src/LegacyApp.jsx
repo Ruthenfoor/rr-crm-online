@@ -5,10 +5,12 @@ function _toPropertyKey(t) { var i = _toPrimitive(t, "string"); return "symbol" 
 function _toPrimitive(t, r) { if ("object" != typeof t || !t) return t; var e = t[Symbol.toPrimitive]; if (void 0 !== e) { var i = e.call(t, r || "default"); if ("object" != typeof i) return i; throw new TypeError("@@toPrimitive must return a primitive value."); } return ("string" === r ? String : Number)(t); }
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import ReactDOM from 'react-dom/client';
-import { Plus, Trash2, Save, ArrowLeft, TrendingUp, AlertCircle, Truck, DollarSign, Calendar, Search, BarChart3, LayoutDashboard, Wallet, X, Settings, Download, ClipboardList, ChevronDown, ChevronRight, Filter, PieChart, FileSpreadsheet, HardDrive, ShieldCheck, Banknote, Upload, Users, Briefcase, CheckCircle2, AlertTriangle, ClipboardCopy, BrainCircuit, Sparkles, Map, FileText, Percent, Check } from 'lucide-react';
+import { Plus, Trash2, Save, ArrowLeft, TrendingUp, AlertCircle, Truck, DollarSign, Calendar, Search, BarChart3, LayoutDashboard, Wallet, X, Settings, Download, ClipboardList, ChevronDown, ChevronRight, Filter, PieChart, FileSpreadsheet, HardDrive, ShieldCheck, Banknote, Upload, Users, Briefcase, CheckCircle2, AlertTriangle, ClipboardCopy, BrainCircuit, Sparkles, Map, FileText, Percent, Check, LogOut } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 import { DataManager } from './DataManager';
+import { auth } from './firebase';
+import { signOut } from 'firebase/auth';
 
 // --- HELPERS ---
 var formatCurrency = n => new Intl.NumberFormat('es-PE', {
@@ -322,7 +324,17 @@ var Editor = _ref3 => {
     items: [],
     isReviewed: false
   });
+  var [saving, setSaving] = useState(false);
+  var [saveSuccess, setSaveSuccess] = useState(null);
+  var [saveError, setSaveError] = useState(null);
   var [toast, setToast] = useState(null);
+
+  useEffect(() => {
+    if (initial) {
+      setForm(initial);
+    }
+  }, [initial]);
+
   var subtotals = useMemo(() => {
     var res = {
       efectivo: 0,
@@ -345,40 +357,75 @@ var Editor = _ref3 => {
   }, [form, subtotals]);
   var showToast = msg => {
     setToast(msg);
-    setTimeout(() => setToast(null), 3000);
+    setTimeout(() => setToast(null), 3500);
   };
   var save = async () => {
-    if (!form.placa) return alert("Falta la placa");
-    var itemsSafe = form.items || [];
+    if (saving) return;
+    setSaveError(null);
+
+    var placaTrim = (form.placa || '').trim().toUpperCase();
+    if (!placaTrim) {
+      setSaveError("Falta la placa del vehículo. Ingresa una placa para poder guardar el despacho.");
+      return;
+    }
+
+    var itemsSafe = (form.items || []).map(i => ({
+      id: String(i.id || Date.now() + Math.random()),
+      type: i.type || 'efectivo',
+      monto: i.monto !== undefined && i.monto !== null ? String(i.monto) : '0',
+      descripcion: i.descripcion || '',
+      verified: Boolean(i.verified)
+    }));
     var allVerified = itemsSafe.length > 0 && itemsSafe.every(i => i.verified);
     var isNew = !form.id;
     var cuadreId = form.id ? String(form.id) : Date.now().toString();
+
+    var cleanMonto = parseFloat(form.montoDespacho) || 0;
+    var cleanRec = totals.rec;
+    var cleanDif = totals.dif;
+
     var newState = _objectSpread(_objectSpread({}, form), {}, {
       id: cuadreId,
+      placa: placaTrim,
+      montoDespacho: cleanMonto,
+      totalRecaudado: cleanRec,
+      diferencia: cleanDif,
       items: itemsSafe,
-      isReviewed: form.isReviewed || allVerified,
-      totalRecaudado: totals.rec,
-      diferencia: totals.dif,
-      updatedAt: new Date()
+      isReviewed: Boolean(form.isReviewed || allVerified),
+      createdAt: form.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     });
-    if (isNew) {
-      newState.createdAt = new Date();
-    }
+
+    setSaving(true);
     try {
       await DataManager.saveCuadre(newState);
       var all = DataManager.getCuadres();
       setCuadres([...all]);
-      showToast("¡Guardado correctamente!");
-      setTimeout(() => setView('dashboard'), 1000);
+      setForm(p => _objectSpread(_objectSpread({}, p), {}, { id: cuadreId, placa: placaTrim }));
+      setSaveSuccess({
+        placa: placaTrim,
+        fecha: newState.fecha,
+        totalRecaudado: cleanRec,
+        diferencia: cleanDif,
+        montoDespacho: cleanMonto
+      });
+      showToast("¡Cuadre guardado correctamente!");
     } catch(e) {
-      alert("Error al guardar: " + e.message);
+      console.error("Error al guardar cuadre:", e);
+      setSaveError(e.message || "Error al conectar con la base de datos.");
+    } finally {
+      setSaving(false);
     }
   };
-  var del = () => {
-    if (confirm("¿Eliminar?")) {
-      var all = DataManager.deleteCuadre(form.id);
-      setCuadres(all);
-      setView('dashboard');
+  var del = async () => {
+    if (confirm("¿Seguro que deseas eliminar este despacho?")) {
+      try {
+        var all = await DataManager.deleteCuadre(form.id);
+        setCuadres(all);
+        setView('dashboard');
+      } catch (e) {
+        alert("Error al eliminar: " + e.message);
+      }
     }
   };
   var addItem = type => setForm(p => _objectSpread(_objectSpread({}, p), {}, {
@@ -405,12 +452,88 @@ var Editor = _ref3 => {
   }));
   return /*#__PURE__*/React.createElement("div", {
     className: "bg-white h-full rounded-2xl shadow-xl flex flex-col overflow-hidden relative animate-slide-in"
-  }, toast && /*#__PURE__*/React.createElement("div", {
+  }, saveSuccess && /*#__PURE__*/React.createElement("div", {
+    className: "fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "bg-white rounded-3xl shadow-2xl border border-emerald-100 max-w-md w-full p-6 text-center animate-slide-in relative overflow-hidden"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600"
+  }), /*#__PURE__*/React.createElement("div", {
+    className: "w-16 h-16 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm ring-8 ring-emerald-50 mt-2"
+  }, /*#__PURE__*/React.createElement(CheckCircle2, {
+    size: 36,
+    className: "text-emerald-600"
+  })), /*#__PURE__*/React.createElement("h3", {
+    className: "text-2xl font-black text-slate-800 tracking-tight mb-1"
+  }, "\xA1Cuadre Guardado con \xC9xito!"), /*#__PURE__*/React.createElement("p", {
+    className: "text-sm text-slate-500 mb-5 font-medium"
+  }, "La informaci\xF3n del despacho se guard\xF3 correctamente."), /*#__PURE__*/React.createElement("div", {
+    className: "bg-slate-50 rounded-2xl p-4 mb-6 border border-slate-200 text-left space-y-2.5"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex justify-between items-center text-sm"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "text-slate-500 font-medium"
+  }, "Placa:"), /*#__PURE__*/React.createElement("span", {
+    className: "font-mono font-black text-slate-800 bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-sm text-base"
+  }, saveSuccess.placa)), /*#__PURE__*/React.createElement("div", {
+    className: "flex justify-between items-center text-sm"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "text-slate-500 font-medium"
+  }, "Fecha:"), /*#__PURE__*/React.createElement("span", {
+    className: "font-bold text-slate-700"
+  }, formatDate(saveSuccess.fecha))), /*#__PURE__*/React.createElement("div", {
+    className: "flex justify-between items-center text-sm"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "text-slate-500 font-medium"
+  }, "Meta Despacho:"), /*#__PURE__*/React.createElement("span", {
+    className: "font-bold text-slate-700"
+  }, formatCurrency(saveSuccess.montoDespacho))), /*#__PURE__*/React.createElement("div", {
+    className: "flex justify-between items-center text-sm"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "text-slate-500 font-medium"
+  }, "Total Recaudado:"), /*#__PURE__*/React.createElement("span", {
+    className: "font-extrabold text-emerald-600"
+  }, formatCurrency(saveSuccess.totalRecaudado))), /*#__PURE__*/React.createElement("div", {
+    className: "flex justify-between items-center text-sm pt-2 border-t border-slate-200"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "text-slate-500 font-medium"
+  }, "Diferencia:"), /*#__PURE__*/React.createElement("span", {
+    className: "font-extrabold ".concat(Math.abs(saveSuccess.diferencia) < 0.1 ? 'text-emerald-600' : saveSuccess.diferencia > 0 ? 'text-blue-600' : 'text-red-600')
+  }, (saveSuccess.diferencia > 0 ? '+' : '') + formatCurrency(saveSuccess.diferencia)))), /*#__PURE__*/React.createElement("div", {
+    className: "flex flex-col sm:flex-row gap-3"
+  }, /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setView('dashboard'),
+    className: "flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold py-3 px-4 rounded-xl shadow-lg shadow-emerald-200 transition-all flex items-center justify-center gap-2 text-sm"
+  }, /*#__PURE__*/React.createElement(ArrowLeft, {
+    size: 18
+  }), " Volver al Dashboard"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setSaveSuccess(null),
+    className: "py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-colors text-sm"
+  }, "Seguir Editando")))), toast && /*#__PURE__*/React.createElement("div", {
     className: "toast"
   }, /*#__PURE__*/React.createElement(CheckCircle2, {
     size: 20,
-    className: "text-green-400"
-  }), " ", toast), /*#__PURE__*/React.createElement("div", {
+    className: "text-emerald-400 shrink-0"
+  }), " ", toast), saveError && /*#__PURE__*/React.createElement("div", {
+    className: "mx-6 mt-4 p-4 rounded-2xl bg-red-50 border border-red-200 text-red-800 flex items-start justify-between gap-3 shadow-sm animate-slide-in"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex items-start gap-3"
+  }, /*#__PURE__*/React.createElement(AlertTriangle, {
+    size: 22,
+    className: "text-red-500 shrink-0 mt-0.5"
+  }), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("p", {
+    className: "font-bold text-sm"
+  }, "No se pudo guardar la informaci\xF3n"), /*#__PURE__*/React.createElement("p", {
+    className: "text-xs text-red-600 mt-0.5 font-medium"
+  }, saveError))), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setSaveError(null),
+    className: "p-1 text-red-400 hover:text-red-600 rounded-lg hover:bg-red-100 transition-colors"
+  }, /*#__PURE__*/React.createElement(X, {
+    size: 18
+  }))), /*#__PURE__*/React.createElement("div", {
     className: "p-4 border-b flex justify-between items-center transition-colors ".concat(form.isReviewed ? 'bg-green-50' : 'bg-white')
   }, /*#__PURE__*/React.createElement("div", {
     className: "flex items-center gap-3"
@@ -619,11 +742,15 @@ var Editor = _ref3 => {
   }, "Total Recaudado:"), " ", /*#__PURE__*/React.createElement("span", {
     className: "font-bold text-slate-800 text-lg"
   }, formatCurrency(totals.rec))), /*#__PURE__*/React.createElement("button", {
+    type: "button",
     onClick: save,
-    className: "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-8 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-blue-200 active:scale-95 transition-transform"
-  }, /*#__PURE__*/React.createElement(Save, {
+    disabled: saving,
+    className: "px-8 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg transition-all ".concat(saving ? 'bg-slate-400 text-white cursor-wait opacity-85' : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-blue-200 active:scale-95')
+  }, saving ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("span", {
+    className: "w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0"
+  }), " Guardando...") : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Save, {
     size: 20
-  }), " Guardar Cambios")));
+  }), " Guardar Cambios"))));
 };
 
 // --- IMPORTACIÓN Y PEGAR DATOS ---
@@ -1630,7 +1757,7 @@ var HistorialPlacasView = _ref12 => {
 };
 
 // --- APP PRINCIPAL ---
-export default function MainApp() {
+export default function MainApp({ user }) {
   var [view, setView] = useState('dashboard');
   var [cuadres, setCuadres] = useState([]);
   var [activeCuadreId, setActiveCuadreId] = useState(null);
@@ -1781,9 +1908,16 @@ export default function MainApp() {
   }, "Nuevo Despacho")), /*#__PURE__*/React.createElement("div", {
     className: "w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center border-2 border-white shadow-sm overflow-hidden"
   }, /*#__PURE__*/React.createElement("img", {
-    src: "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix",
+    src: "https://api.dicebear.com/7.x/avataaars/svg?seed=" + ((user && user.email) || "Felix"),
     alt: "User",
     className: "w-full h-full object-cover"
+  })), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => signOut(auth),
+    title: "Cerrar sesión",
+    className: "p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors ml-1"
+  }, /*#__PURE__*/React.createElement(LogOut, {
+    size: 18
   })))), /*#__PURE__*/React.createElement("div", {
     className: "flex-1 overflow-hidden p-6"
   }, view === 'dashboard' && /*#__PURE__*/React.createElement(Dashboard, {
@@ -1794,7 +1928,7 @@ export default function MainApp() {
   }), (view === 'create' || view === 'edit') && /*#__PURE__*/React.createElement("div", {
     className: "h-full max-w-4xl mx-auto"
   }, /*#__PURE__*/React.createElement(Editor, {
-    initial: view === 'edit' ? cuadres.find(c => c.id === activeCuadreId) : null,
+    initial: view === 'edit' ? cuadres.find(c => String(c.id) === String(activeCuadreId)) : null,
     setView: setView,
     setCuadres: setCuadres,
     uniquePlates: uniquePlates
